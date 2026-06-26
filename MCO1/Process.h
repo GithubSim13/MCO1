@@ -9,7 +9,7 @@ typedef std::string String;
 
 struct LogEntry {
     String timestamp;
-    int coreId;
+    int    coreId;
     String message;
 };
 
@@ -20,19 +20,36 @@ public:
     Process(const String& name, int id, int totalInstructions);
     ~Process();
 
-    String name;
-    int id;
-    int currentLine;
-    int totalLines;
-    ProcessState state;
-    int assignedCore;
-    String creationTime;
 
+    String name;
+    int    id;
+
+   
+    int          currentLine;
+    int          totalLines;
+    ProcessState state;
+    int          assignedCore;
+    String       creationTime;
+
+    
+    int sleepTicks;
+
+   
     std::vector<IInstruction*> instructions;
-    std::vector<LogEntry> logs;
+    std::vector<LogEntry>      logs;
+
+    
     std::unordered_map<String, uint16_t> variables;
+
     std::mutex processMutex;
 
     bool isFinished();
     void addLog(const String& timestamp, int coreId, const String& message);
+
+    
+    void generateInstructions(int minIns, int maxIns, int forDepth = 0);
+
+private:
+    
+    IInstruction* makeRandomInstruction(int currentDepth, int remainingBudget);
 };
