@@ -136,7 +136,7 @@ void ProcessScheduler::run() {
         else if (config->scheduler == "\"rr\"" || config->scheduler == "rr")
             scheduleRR();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 }
 

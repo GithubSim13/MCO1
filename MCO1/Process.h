@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <atomic>
 #include <mutex>
 #include "IInstruction.h"
 
@@ -27,7 +28,7 @@ public:
    
     int          currentLine;
     int          totalLines;
-    ProcessState state;
+    std::atomic<ProcessState> state;
     int          assignedCore;
     String       creationTime;
 

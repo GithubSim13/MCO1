@@ -55,6 +55,9 @@ void Core::run() {
 
                 instructionsRun++;
 
+                if (config->delayPerExec == 0)
+                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+
                 // Quantum preemption check (RR)
                 if (quantumSlice > 0 && instructionsRun >= quantumSlice) {
                     preempted = true;
