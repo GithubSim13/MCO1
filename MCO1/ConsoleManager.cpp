@@ -64,8 +64,22 @@ void ConsoleManager::handleCommand(const String& input) {
         }
         else if (flag == "-s") {
             iss >> name;
-            // TODO: create new process and open screen
-            std::cout << "Creating screen: " << name << "\n";
+            ConfigManager* config = ConfigManager::getInstance();
+            ProcessScheduler* sched = ProcessScheduler::getInstance();
+            {
+                std::lock_guard<std::mutex> lk(sched->queueMutex);
+                for (Process* p : sched->allProcesses)
+                    if (p->name == name) {
+                        std::cout << "Process " << name << " already exists.\n";
+                        return;
+                    }
+            }
+            int pid = (int)sched->allProcesses.size() + 1;
+            Process* p = new Process(name, pid, config->minIns);
+            p->creationTime = ScreenManager::getInstance()->getTimestamp();
+            p->generateInstructions(config->minIns, config->maxIns);
+            sched->addProcess(p);
+            ScreenManager::getInstance()->openScreen(p);
         }
         else if (flag == "-r") {
             iss >> name;
@@ -81,8 +95,7 @@ void ConsoleManager::handleCommand(const String& input) {
         std::cout << "Scheduler stopped.\n";
     }
     else if (cmd == "report-util") {
-        // TODO: write to csopesy-log.txt
-        ScreenManager::getInstance()->listScreens();
+        ScreenManager::getInstance()->reportUtil();
         std::cout << "Report generated at csopesy-log.txt\n";
     }
     else {

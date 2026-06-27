@@ -114,16 +114,13 @@ IInstruction* Process::makeRandomInstruction(int currentDepth, int remainingBudg
 }
 
 
-void Process::generateInstructions(int minIns, int maxIns, int ) {
-   
+void Process::generateInstructions(int minIns, int maxIns, int) {
     for (auto ins : instructions)
         delete ins;
     instructions.clear();
 
-    
     totalLines = randInt(minIns, maxIns);
     instructions.reserve(totalLines);
-
     for (int i = 0; i < totalLines; ++i) {
         instructions.push_back(makeRandomInstruction(0, totalLines - i));
     }

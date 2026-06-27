@@ -53,10 +53,16 @@ void ProcessScheduler::stopScheduler() {
     running = false;
 }
 
-// Called by Core's onPreempt lambda (RR only)
+// Called by Core's onPreempt lambda (RR preemption and SLEEP relinquishment)
 void ProcessScheduler::requeueProcess(Process* process) {
     std::lock_guard<std::mutex> lock(queueMutex);
-    readyQueue.push(process);
+    if (process->sleepTicks > 0) {
+        int wakeAt = cpuCycle.load() + process->sleepTicks;
+        process->sleepTicks = 0;
+        sleepingQueue.push_back({ wakeAt, process });
+    } else {
+        readyQueue.push(process);
+    }
 }
 
 // -----------------------------------------------------------------------
@@ -73,9 +79,10 @@ static String makeTimestamp() {
 #endif
     std::ostringstream oss;
     int h12 = (ltm.tm_hour % 12 == 0) ? 12 : ltm.tm_hour % 12;
-    oss << "(" << (ltm.tm_mon + 1) << "/" << ltm.tm_mday
+    oss << std::setfill('0')
+        << "(" << std::setw(2) << (ltm.tm_mon + 1) << "/" << std::setw(2) << ltm.tm_mday
         << "/" << (1900 + ltm.tm_year)
-        << " " << std::setfill('0') << std::setw(2) << h12
+        << " " << std::setw(2) << h12
         << ":" << std::setw(2) << ltm.tm_min
         << ":" << std::setw(2) << ltm.tm_sec
         << (ltm.tm_hour >= 12 ? "PM" : "AM") << ")";
@@ -101,12 +108,26 @@ void ProcessScheduler::run() {
     ConfigManager* config = ConfigManager::getInstance();
 
     while (true) {
-        // Batch process generation: every batchProcessFreq CPU cycles
-        if (running) {
-            int cycle = cpuCycle.fetch_add(1);
-            if (config->batchProcessFreq > 0 && cycle % config->batchProcessFreq == 0) {
-                generateBatchProcess();
+        // Advance the CPU cycle counter unconditionally so sleeping processes
+        // are not frozen when scheduler-stop is called.
+        int cycle = cpuCycle.fetch_add(1);
+
+        // Wake any sleeping processes whose sleep period has expired
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            for (auto it = sleepingQueue.begin(); it != sleepingQueue.end(); ) {
+                if (cycle >= it->first) {
+                    readyQueue.push(it->second);
+                    it = sleepingQueue.erase(it);
+                } else {
+                    ++it;
+                }
             }
+        }
+
+        // Batch process generation: every batchProcessFreq CPU cycles
+        if (running && config->batchProcessFreq > 0 && cycle % config->batchProcessFreq == 0) {
+            generateBatchProcess();
         }
 
         // Dispatch to cores

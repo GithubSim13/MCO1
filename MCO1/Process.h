@@ -32,7 +32,8 @@ public:
     String       creationTime;
 
     
-    int sleepTicks;
+    int  sleepTicks;
+    bool pendingSleep = false;
 
    
     std::vector<IInstruction*> instructions;

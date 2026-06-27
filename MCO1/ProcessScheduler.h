@@ -7,6 +7,7 @@
 #include <mutex>
 #include <atomic>
 #include <string>
+#include <utility>
 
 typedef std::string String;
 
@@ -31,11 +32,12 @@ private:
     ProcessScheduler() {}
     static ProcessScheduler* instance;
 
-    std::queue<Process*>  readyQueue;
-    std::vector<Core*>    cores;
-    std::atomic<bool>     running{ false };   // batch generation on/off
-    std::atomic<int>      cpuCycle{ 0 };      // monotonic CPU cycle counter
-    std::atomic<int>      nextPid{ 1 };       // p01, p02, ...
+    std::queue<Process*>                    readyQueue;
+    std::vector<std::pair<int, Process*>>   sleepingQueue;  // {wakeAtCycle, process}
+    std::vector<Core*>                      cores;
+    std::atomic<bool>                       running{ false };
+    std::atomic<int>                        cpuCycle{ 0 };
+    std::atomic<int>                        nextPid{ 1 };
 
     void scheduleFCFS();
     void scheduleRR();

@@ -32,13 +32,6 @@ void Core::run() {
 
             while (currentProcess->currentLine < currentProcess->totalLines) {
 
-                // Handle SLEEP: burn ticks before executing
-                if (currentProcess->sleepTicks > 0) {
-                    currentProcess->sleepTicks--;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                    continue;
-                }
-
                 // delay-per-exec busy wait
                 for (int d = 0; d < config->delayPerExec; d++) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -48,15 +41,21 @@ void Core::run() {
                 if (currentProcess->currentLine < (int)currentProcess->instructions.size()) {
                     currentProcess->instructions[currentProcess->currentLine]->execute(currentProcess);
                 }
-                // Note: PrintInstruction and others already do currentLine++ internally.
-                // But non-print instructions may not — we guard with the increment below only
-                // if the instruction didn't already advance the line.
-                // Since ALL our instruction types call currentLine++ themselves (see IInstruction.cpp),
-                // we do NOT double-increment here.
+
+                // Sleep relinquishment: SLEEP instruction sets pendingSleep; hand process
+                // back to the scheduler's sleeping queue and free this core immediately.
+                if (currentProcess->pendingSleep) {
+                    currentProcess->pendingSleep = false;
+                    currentProcess->state        = Process::READY;
+                    if (onPreempt) onPreempt(currentProcess);
+                    currentProcess = nullptr;
+                    available      = true;
+                    break;
+                }
 
                 instructionsRun++;
 
-                // Quantum preemption check
+                // Quantum preemption check (RR)
                 if (quantumSlice > 0 && instructionsRun >= quantumSlice) {
                     preempted = true;
                     break;
