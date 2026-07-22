@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "IMemoryAllocator.h"
 
 typedef std::string String;
 
@@ -11,11 +12,18 @@ public:
 
     void run();
 
+    // Helper getter for process/scheduler access
+    IMemoryAllocator* getMemoryAllocator() const { return memoryAllocator; }
+
 private:
-    ConsoleManager() {}
+    ConsoleManager() = default;
+    ~ConsoleManager();
+
     static ConsoleManager* instance;
 
     bool isInitialized = false;
+    IMemoryAllocator* memoryAllocator = nullptr;
+
     void printHeader();
     void handleCommand(const String& command);
 };

@@ -8,6 +8,9 @@ public:
     static ConfigManager* getInstance();
     static void initialize();
     static void destroy();
+    int maxOverallMem;
+    int memPerFrame;
+    int memPerProc;
 
     bool loadConfig(const String& filename);
 

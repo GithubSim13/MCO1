@@ -22,7 +22,7 @@ bool ConfigManager::loadConfig(const String& filename) {
     if (!file.is_open()) {
         std::cout << "Error: config.txt not found.\n";
         return false;
-    }
+    } 
 
     String key;
     while (file >> key) {
@@ -33,6 +33,9 @@ bool ConfigManager::loadConfig(const String& filename) {
         else if (key == "min-ins") file >> minIns;
         else if (key == "max-ins") file >> maxIns;
         else if (key == "delay-per-exec") file >> delayPerExec;
+        else if (key == "max-overall-mem") file >> maxOverallMem;
+        else if (key == "mem-per-frame") file >> memPerFrame;
+        else if (key == "mem-per-proc") file >> memPerProc;
     }
     return true;
 }
