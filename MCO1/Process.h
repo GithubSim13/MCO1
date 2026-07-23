@@ -43,10 +43,14 @@ public:
     
     std::unordered_map<String, uint16_t> variables;
 
+    void* memoryPtr = nullptr;
+    std::unordered_map<String, size_t> varSlots;
+
     std::mutex processMutex;
 
     bool isFinished();
     void addLog(const String& timestamp, int coreId, const String& message);
+    void accessMemory(const String& varName, bool isWrite);
 
     
     void generateInstructions(int minIns, int maxIns, int forDepth = 0);

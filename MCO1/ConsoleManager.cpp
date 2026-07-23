@@ -98,16 +98,30 @@ void ConsoleManager::handleCommand(const String& input) {
         }
         else if (flag == "-s") {
             iss >> name;
-            // Example: Allocate memory for a process during creation
-            size_t procMem = static_cast<size_t>(ConfigManager::getInstance()->memPerProc);
-            void* allocatedPtr = memoryAllocator->allocate(procMem);
-
-            if (allocatedPtr != nullptr) {
-                std::cout << "Creating screen: " << name 
-                          << " | Memory allocated at: " << allocatedPtr << "\n";
-            } else {
-                std::cout << "Error: Out of memory. Could not allocate memory for process " << name << "\n";
+            ConfigManager* config = ConfigManager::getInstance();
+            ProcessScheduler* sched = ProcessScheduler::getInstance();
+            {
+                std::lock_guard<std::mutex> lk(sched->queueMutex);
+                for (Process* p : sched->allProcesses)
+                    if (p->name == name) {
+                        std::cout << "Process " << name << " already exists.\n";
+                        return;
+                    }
             }
+
+            void* allocatedPtr = memoryAllocator->allocate(static_cast<size_t>(config->memPerProc));
+            if (allocatedPtr == nullptr) {
+                std::cout << "Error: Out of memory. Could not allocate memory for process " << name << "\n";
+                return;
+            }
+
+            int pid = (int)sched->allProcesses.size() + 1;
+            Process* p = new Process(name, pid, config->minIns);
+            p->creationTime = ScreenManager::getInstance()->getTimestamp();
+            p->generateInstructions(config->minIns, config->maxIns);
+            p->memoryPtr = allocatedPtr;
+            sched->addProcess(p);
+            ScreenManager::getInstance()->openScreen(p);
         }
         else if (flag == "-r") {
             iss >> name;
@@ -123,7 +137,7 @@ void ConsoleManager::handleCommand(const String& input) {
         std::cout << "Scheduler stopped.\n";
     }
     else if (cmd == "report-util") {
-        ScreenManager::getInstance()->listScreens();
+        ScreenManager::getInstance()->reportUtil();
         std::cout << "Report generated at csopesy-log.txt\n";
     }
     else {

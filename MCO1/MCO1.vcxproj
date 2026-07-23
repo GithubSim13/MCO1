@@ -129,6 +129,7 @@
     <ClCompile Include="IETThread.cpp" />
     <ClCompile Include="IInstruction.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PagingMemoryAllocator.cpp" />
     <ClCompile Include="Process.cpp" />
     <ClCompile Include="ProcessScheduler.cpp" />
     <ClCompile Include="ScreenManager.cpp" />
@@ -139,6 +140,8 @@
     <ClInclude Include="Core.h" />
     <ClInclude Include="IETThread.h" />
     <ClInclude Include="IInstruction.h" />
+    <ClInclude Include="IMemoryAllocator.h" />
+    <ClInclude Include="PagingMemoryAllocator.h" />
     <ClInclude Include="Process.h" />
     <ClInclude Include="ProcessScheduler.h" />
     <ClInclude Include="ScreenManager.h" />

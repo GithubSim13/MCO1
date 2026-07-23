@@ -1,4 +1,5 @@
 #include "Process.h"
+#include "ConsoleManager.h"
 #include <algorithm>
 #include <random>
 #include <ctime>
@@ -64,6 +65,23 @@ bool Process::isFinished() {
 void Process::addLog(const String& timestamp, int coreId, const String& message) {
     std::lock_guard<std::mutex> lock(processMutex);
     logs.push_back({ timestamp, coreId, message });
+}
+
+void Process::accessMemory(const String& varName, bool isWrite) {
+    if (memoryPtr == nullptr) return;
+
+    // Each variable takes a 2-byte slot in the process's memory block
+    size_t slot;
+    auto it = varSlots.find(varName);
+    if (it != varSlots.end()) {
+        slot = it->second;
+    } else {
+        slot = varSlots.size();
+        varSlots[varName] = slot;
+    }
+
+    IMemoryAllocator* allocator = ConsoleManager::getInstance()->getMemoryAllocator();
+    allocator->accessMemory(memoryPtr, slot * sizeof(uint16_t), isWrite);
 }
 
 

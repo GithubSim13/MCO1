@@ -1,5 +1,6 @@
 #include "ProcessScheduler.h"
 #include "ConfigManager.h"
+#include "ConsoleManager.h"
 #include "ScreenManager.h"
 #include <iostream>
 #include <iomanip>
@@ -100,6 +101,8 @@ void ProcessScheduler::generateBatchProcess() {
     Process* p = new Process(name, pid, config->minIns);
     p->creationTime = makeTimestamp();
     p->generateInstructions(config->minIns, config->maxIns);
+    p->memoryPtr = ConsoleManager::getInstance()->getMemoryAllocator()->allocate(
+        static_cast<size_t>(config->memPerProc));
 
     addProcess(p);
 }

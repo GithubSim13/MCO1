@@ -17,6 +17,7 @@ public:
 
     virtual void* allocate(size_t size) = 0;
     virtual void deallocate(void* ptr) = 0;
+    virtual void accessMemory(void* ptr, size_t offset, bool isWrite) = 0;
     virtual String visualizeMemory() = 0;
 
 protected:

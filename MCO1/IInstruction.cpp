@@ -19,6 +19,7 @@ void PrintInstruction::execute(Process* process) {
         output = "Hello world from " + process->name + "!";
     }
     else if (isVar) {
+        process->accessMemory(msg, false);
         auto it = process->variables.find(msg);
         uint16_t val = (it != process->variables.end()) ? it->second : 0;
         output = "Value from: " + std::to_string(val);
@@ -37,6 +38,7 @@ DeclareInstruction::DeclareInstruction(const String& varName, uint16_t value)
 void DeclareInstruction::execute(Process* process) {
     if (process->variables.find(varName) == process->variables.end()) {
         process->variables[varName] = value;
+        process->accessMemory(varName, true);
     }
     process->currentLine++;
 }
@@ -47,6 +49,7 @@ AddInstruction::AddInstruction(const String& dest, const Operand& op1, const Ope
 
 uint16_t AddInstruction::resolve(Process* process, const Operand& op) {
     if (op.isLiteral) return op.literal;
+    process->accessMemory(op.name, false);
     auto it = process->variables.find(op.name);
     return (it != process->variables.end()) ? it->second : 0;
 }
@@ -55,6 +58,7 @@ void AddInstruction::execute(Process* process) {
     int32_t a = resolve(process, op1);
     int32_t b = resolve(process, op2);
     process->variables[dest] = clamp16(a + b);
+    process->accessMemory(dest, true);
     process->currentLine++;
 }
 
@@ -64,6 +68,7 @@ SubtractInstruction::SubtractInstruction(const String& dest, const Operand& op1,
 
 uint16_t SubtractInstruction::resolve(Process* process, const Operand& op) {
     if (op.isLiteral) return op.literal;
+    process->accessMemory(op.name, false);
     auto it = process->variables.find(op.name);
     return (it != process->variables.end()) ? it->second : 0;
 }
@@ -72,6 +77,7 @@ void SubtractInstruction::execute(Process* process) {
     int32_t a = resolve(process, op1);
     int32_t b = resolve(process, op2);
     process->variables[dest] = clamp16(a - b);
+    process->accessMemory(dest, true);
     process->currentLine++;
 }
 

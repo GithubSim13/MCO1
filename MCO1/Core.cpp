@@ -1,5 +1,6 @@
 #include "Core.h"
 #include "ConfigManager.h"
+#include "ConsoleManager.h"
 #include <chrono>
 
 Core::Core(int id)
@@ -72,8 +73,12 @@ void Core::run() {
                 currentProcess = nullptr;
                 available = true;
             } else if (currentProcess != nullptr) {
-                // Ran to completion
+                // release memory
                 currentProcess->state = Process::FINISHED;
+                if (currentProcess->memoryPtr != nullptr) {
+                    ConsoleManager::getInstance()->getMemoryAllocator()->deallocate(currentProcess->memoryPtr);
+                    currentProcess->memoryPtr = nullptr;
+                }
                 currentProcess = nullptr;
                 available = true;
             }

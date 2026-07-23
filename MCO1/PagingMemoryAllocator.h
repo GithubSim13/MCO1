@@ -2,6 +2,8 @@
 #include "IMemoryAllocator.h"
 #include <vector>
 #include <unordered_map>
+#include <queue>
+#include <mutex>
 #include <iostream>
 #include <fstream>
 
@@ -19,6 +21,7 @@ public:
 
     void* allocate(size_t size) override;
     void deallocate(void* ptr) override;
+    void accessMemory(void* ptr, size_t offset, bool isWrite) override;
     String visualizeMemory() override;
 
     // Tracker getters
@@ -30,16 +33,26 @@ private:
     size_t numFrames;
 
     std::vector<bool> freeFrames;
+    std::vector<char> physicalMemory; // Actual frame contents, frameSize bytes per frame
     std::unordered_map<void*, std::vector<PageTableEntry>> processPageTables;
     std::unordered_map<void*, size_t> allocationSizes;
+
+    // FIFO order of resident pages, for victim selection on eviction
+    std::queue<std::pair<void*, size_t>> fifoPages;
 
     // Backing Store simulation
     std::fstream backingStoreFile;
     int backingStoreNextOffset = 0;
+    std::vector<int> freeBackingOffsets; // Reclaimed offsets, reused before growing the file
 
     // Page Fault / Paging Counters
     int numPagedIn = 0;
     int numPagedOut = 0;
 
+    size_t nextVirtualBase = 0x100000;
+
+    std::mutex memoryMutex;
+
     int findFreeFrame();
+    int evictVictimFrame();
 };
