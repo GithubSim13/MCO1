@@ -84,8 +84,12 @@ bool ConfigManager::validateConfig(String& errorMessage) const {
         err << "scheduler must be \"fcfs\" or \"rr\", got \"" << scheduler << "\"";
         errorMessage = err.str(); return false;
     }
-    if (quantumCycles < 1) {
-        err << "quantum-cycles must be >= 1, got " << quantumCycles;
+    if (scheduler == "rr" && quantumCycles < 1) {
+        err << "quantum-cycles must be >= 1 when scheduler is \"rr\", got " << quantumCycles;
+        errorMessage = err.str(); return false;
+    }
+    if (quantumCycles < 0) {
+        err << "quantum-cycles must be >= 0, got " << quantumCycles;
         errorMessage = err.str(); return false;
     }
     if (batchProcessFreq < 1) {

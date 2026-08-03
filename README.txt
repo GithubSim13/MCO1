@@ -27,7 +27,8 @@ How to Run:
 config.txt Format (space-separated):
    num-cpu           <1-128>
    scheduler         "fcfs" or "rr"
-   quantum-cycles    <1-2^32>
+   quantum-cycles    <1-2^32> if scheduler is "rr" (unused, so any value
+                     including 0 is accepted, if scheduler is "fcfs")
    batch-process-freq <1-2^32>
    min-ins           <1-2^32>
    max-ins           <1-2^32>
@@ -44,14 +45,29 @@ Available Commands (after running initialize):
    initialize            - loads + validates config.txt, boots the memory
                             allocator and scheduler
    exit                  - terminates the program
-   screen -s <name> <mem>            - creates a process with `mem` bytes of
-                                        memory (power of 2, [64, 65536]) and
-                                        opens its screen
-   screen -c <name> <mem> "<instrs>" - creates a process with a user-supplied,
+   screen -s <name> [mem]            - creates a process and opens its screen.
+                                        Memory size is OPTIONAL: give a power-of-2
+                                        size in [64, 65536] to set it explicitly
+                                        (invalid sizes get rejected with "invalid
+                                        memory allocation"), or omit it entirely
+                                        and the process gets the maximum allowed
+                                        size (65536 bytes) - useful for quickly
+                                        testing arbitrary READ/WRITE addresses
+                                        without doing the math on a small config.
+   screen -c <name> [mem] "<instrs>" - creates a process with a user-supplied,
                                         semicolon-separated instruction list
                                         (1-50 instructions) instead of a
-                                        randomly generated one. Example:
+                                        randomly generated one. Memory size is
+                                        optional here too, same rule as above.
+                                        Example (no size - gets 65536 bytes):
+     screen -c faulty_process "DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT("Result: " + varC)"
+                                        Example (explicit size):
      screen -c proc1 4096 "DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT("Result: " + varC)"
+     NOTE ON QUOTES: the outer "..." wraps the whole instruction list; a
+     PRINT's own "text" quotes nest inside it as plain double-quotes too
+     (no backslash-escaping needed) - the parser finds the FIRST and LAST
+     quote in the line to know where the instruction list starts/ends, so
+     type it exactly as shown above, not with \" escapes.
    screen -r <name>      - reattaches to a still-running process's screen.
                             If the process was shut down for an out-of-bounds
                             memory access, prints the violation diagnostic

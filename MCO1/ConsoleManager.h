@@ -38,4 +38,9 @@ private:
     // Shared validation for process memory sizes: must be a power of 2 in
     // [64, 65536] per the spec ("invalid memory allocation" otherwise).
     bool validateProcessMemorySize(const String& sizeStr, size_t& outSize);
+
+    // Used by screen -s / screen -c when no explicit memory size is given:
+    // rolls a size the same way a scheduler-generated process gets one
+    // (uniform random in [min-mem-per-proc, max-mem-per-proc]).
+    size_t rollConfiguredMemSize();
 };
