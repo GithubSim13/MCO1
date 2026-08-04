@@ -7,6 +7,8 @@
 #include <sstream>
 #include <iomanip>
 
+const size_t Process::MAX_SYMBOL_TABLE_VARS;
+
 static thread_local std::mt19937 rng(std::random_device{}());
 
 static int randInt(int lo, int hi) {
@@ -93,7 +95,8 @@ bool Process::declareVariable(const String& name, uint16_t value) {
         // MO1 semantics: DECLARE never overwrites an existing variable.
         return true;
     }
-    if (varSlots.size() >= MAX_SYMBOL_TABLE_VARS) {
+    size_t capacity = std::min(MAX_SYMBOL_TABLE_VARS, memSize / sizeof(uint16_t));
+    if (varSlots.size() >= capacity) {
         // Symbol table full: new declarations are silently ignored per spec.
         return false;
     }
@@ -114,7 +117,8 @@ bool Process::setVariable(const String& name, uint16_t value) {
     if (it != varSlots.end()) {
         slot = it->second;
     } else {
-        if (varSlots.size() >= MAX_SYMBOL_TABLE_VARS) return false; // table full, ignored
+        size_t capacity = std::min(MAX_SYMBOL_TABLE_VARS, memSize / sizeof(uint16_t));
+        if (varSlots.size() >= capacity) return false; // table full, ignored
         slot = varSlots.size();
         varSlots[name] = slot;
     }

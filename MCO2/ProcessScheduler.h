@@ -39,7 +39,7 @@ private:
     std::atomic<int>                        cpuCycle{ 0 };
     std::atomic<int>                        nextPid{ 1 };
 
-    void scheduleFCFS();
-    void scheduleRR();
+    bool scheduleFCFS();
+    bool scheduleRR();
     void generateBatchProcess();  // spawns one pXX process
 };

@@ -111,12 +111,12 @@ bool ConfigManager::validateConfig(String& errorMessage) const {
             << ") must be an exact multiple of mem-per-frame (" << memPerFrame << ")";
         errorMessage = err.str(); return false;
     }
-    if (minMemPerProc < 64 || minMemPerProc > 65536 || !isPowerOfTwo(minMemPerProc)) {
-        err << "min-mem-per-proc must be a power of 2 in [64, 65536], got " << minMemPerProc;
+    if (minMemPerProc < 2 || !isPowerOfTwo(minMemPerProc)) {
+        err << "min-mem-per-proc must be a power of 2 >= 2, got " << minMemPerProc;
         errorMessage = err.str(); return false;
     }
-    if (maxMemPerProc < 64 || maxMemPerProc > 65536 || !isPowerOfTwo(maxMemPerProc)) {
-        err << "max-mem-per-proc must be a power of 2 in [64, 65536], got " << maxMemPerProc;
+    if (maxMemPerProc < 2 || !isPowerOfTwo(maxMemPerProc)) {
+        err << "max-mem-per-proc must be a power of 2 >= 2, got " << maxMemPerProc;
         errorMessage = err.str(); return false;
     }
     if (minMemPerProc > maxMemPerProc) {

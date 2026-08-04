@@ -116,61 +116,104 @@ void ProcessScheduler::generateBatchProcess() {
 
 void ProcessScheduler::run() {
     ConfigManager* config = ConfigManager::getInstance();
+    int idleStreak = 0;
+
+    // One "CPU cycle" (what batch-process-freq, SLEEP ticks, etc. are counted
+    // in) advances at this fixed real-time rate, independent of how fast the
+    // dispatch loop below can actually iterate. Without this decoupling,
+    // removing the old fixed per-iteration sleep (needed so cores can be
+    // reassigned quickly under load, for healthy CPU utilization) would also
+    // make "cycle" advance at whatever speed the host machine allows -
+    // meaning "batch-process-freq 60" could mean 60 cycles in a fraction of
+    // a millisecond instead of a meaningfully observable pause, flooding the
+    // system with far more processes than intended.
+    const auto CYCLE_DURATION = std::chrono::milliseconds(10);
+    auto lastCycleTime = std::chrono::steady_clock::now();
 
     while (true) {
-        // Cycle counter advances regardless of scheduler-stop, so sleeps don't freeze.
-        int cycle = cpuCycle.fetch_add(1);
+        bool didWork = false;
 
-        // Wake any sleeping processes whose sleep period has expired
-        {
-            std::lock_guard<std::mutex> lock(queueMutex);
-            for (auto it = sleepingQueue.begin(); it != sleepingQueue.end(); ) {
-                if (cycle >= it->first) {
-                    readyQueue.push(it->second);
-                    it = sleepingQueue.erase(it);
-                } else {
-                    ++it;
+        auto now = std::chrono::steady_clock::now();
+        if (now - lastCycleTime >= CYCLE_DURATION) {
+            lastCycleTime = now;
+            int cycle = cpuCycle.fetch_add(1);
+
+            // Wake any sleeping processes whose sleep period has expired
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                for (auto it = sleepingQueue.begin(); it != sleepingQueue.end(); ) {
+                    if (cycle >= it->first) {
+                        readyQueue.push(it->second);
+                        it = sleepingQueue.erase(it);
+                        didWork = true;
+                    } else {
+                        ++it;
+                    }
                 }
+            }
+
+            // Generate a process every batchProcessFreq cycles.
+            if (running && config->batchProcessFreq > 0 && cycle % config->batchProcessFreq == 0) {
+                generateBatchProcess();
+                didWork = true;
             }
         }
 
-        // Generate a process every batchProcessFreq cycles.
-        if (running && config->batchProcessFreq > 0 && cycle % config->batchProcessFreq == 0) {
-            generateBatchProcess();
-        }
-
-        // Dispatch to cores
+        // Dispatch to cores - runs every loop iteration regardless of the
+        // cycle-rate gate above, so a core that just freed up gets reassigned
+        // as fast as the host machine allows, not throttled to CYCLE_DURATION.
+        bool dispatched = false;
         if (config->scheduler == "\"fcfs\"" || config->scheduler == "fcfs")
-            scheduleFCFS();
+            dispatched = scheduleFCFS();
         else if (config->scheduler == "\"rr\"" || config->scheduler == "rr")
-            scheduleRR();
+            dispatched = scheduleRR();
+        didWork = didWork || dispatched;
 
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
+        // Only back off when the cycle genuinely had nothing to do - sleeping
+        // unconditionally here would throttle dispatch to this interval even
+        // while cores are finishing quanta far faster than that, starving
+        // CPU utilization numbers even though real throughput is happening.
+        if (!didWork) {
+            idleStreak++;
+            if (idleStreak < 200) {
+                std::this_thread::yield();
+            } else {
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        } else {
+            idleStreak = 0;
+        }
     }
 }
 
 // FCFS: assign a queued process to a free core, run to completion.
-void ProcessScheduler::scheduleFCFS() {
+bool ProcessScheduler::scheduleFCFS() {
     std::lock_guard<std::mutex> lock(queueMutex);
+    bool dispatchedAny = false;
     for (Core* core : cores) {
         if (core->isAvailable() && !readyQueue.empty()) {
             Process* next = readyQueue.front();
             readyQueue.pop();
             core->assignProcess(next, -1);   // -1 = no quantum limit
+            dispatchedAny = true;
         }
     }
+    return dispatchedAny;
 }
 
 // RR: assign a process for exactly quantumCycles instructions, then preempt.
-void ProcessScheduler::scheduleRR() {
+bool ProcessScheduler::scheduleRR() {
     ConfigManager* config = ConfigManager::getInstance();
     std::lock_guard<std::mutex> lock(queueMutex);
+    bool dispatchedAny = false;
 
     for (Core* core : cores) {
         if (core->isAvailable() && !readyQueue.empty()) {
             Process* next = readyQueue.front();
             readyQueue.pop();
             core->assignProcess(next, config->quantumCycles);
+            dispatchedAny = true;
         }
     }
+    return dispatchedAny;
 }

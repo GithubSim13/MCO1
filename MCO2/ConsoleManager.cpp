@@ -187,15 +187,26 @@ void ConsoleManager::handleProcessSmi() {
 
     size_t total = memoryAllocator->getTotalMemory();
     size_t used  = memoryAllocator->getUsedMemory();
-    double util  = total > 0 ? (100.0 * static_cast<double>(used) / static_cast<double>(total)) : 0.0;
+    double memUtil = total > 0 ? (100.0 * static_cast<double>(used) / static_cast<double>(total)) : 0.0;
 
     ProcessScheduler* sched = ProcessScheduler::getInstance();
+    ConfigManager* config = ConfigManager::getInstance();
+
+    int totalCores = config->numCpu;
+    int coresUsed = 0;
+    {
+        std::lock_guard<std::mutex> lk(sched->queueMutex);
+        for (Process* p : sched->allProcesses)
+            if (p->state == Process::RUNNING) coresUsed++;
+    }
+    int cpuUtil = totalCores > 0 ? (coresUsed * 100 / totalCores) : 0;
 
     std::cout << "------------------------------------------------------------\n";
     std::cout << "PROCESS-SMI\n";
     std::cout << "------------------------------------------------------------\n";
+    std::cout << "CPU Utilization: " << cpuUtil << "%  (" << coresUsed << "/" << totalCores << " cores)\n";
     std::cout << "Memory Usage: " << used << "B / " << total << "B\n";
-    std::cout << "Memory Util : " << std::fixed << std::setprecision(1) << util << "%\n";
+    std::cout << "Memory Util : " << std::fixed << std::setprecision(1) << memUtil << "%\n";
     std::cout << "------------------------------------------------------------\n";
     std::cout << std::left << std::setw(14) << "Process" << "Memory\n";
     {

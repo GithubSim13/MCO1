@@ -35,8 +35,12 @@ config.txt Format (space-separated):
    delay-per-exec    <0-2^32>
    max-overall-mem   total RAM in bytes (must be an exact multiple of mem-per-frame)
    mem-per-frame     bytes per physical frame / page
-   min-mem-per-proc  power of 2 in [64, 65536] - lower bound for scheduler-generated process size
-   max-mem-per-proc  power of 2 in [64, 65536] - upper bound for scheduler-generated process size
+   min-mem-per-proc  power of 2 (>= 2) - lower bound for scheduler-generated process size
+   max-mem-per-proc  power of 2 (>= 2) - upper bound for scheduler-generated process size
+                     (NOTE: the [64, 65536] power-of-2 range from the spec applies to
+                     manually-typed "screen -s"/"screen -c" sizes, not to this config
+                     range - a process this small still gets a correctly-sized symbol
+                     table, capped at min(32, memSize/2) variables rather than a fixed 32)
 All of the above are validated on "initialize" - a misconfigured config.txt
 will print a specific error naming the offending field instead of starting
 with silently-wrong behavior.
@@ -81,8 +85,9 @@ Available Commands (after running initialize):
    report-util            - writes the screen -ls report to csopesy-log.txt
    vmstat                 - total/used/free memory, idle/active/total CPU
                             ticks, cumulative pages paged in/out
-   process-smi            - nvidia-smi-style summary: overall memory
-                            usage/utilization + per-process memory footprint
+   process-smi            - nvidia-smi-style summary: CPU utilization +
+                            overall memory usage/utilization + per-process
+                            memory footprint
 
 Inside a Process Screen:
    process-smi       - refreshes the process's own info/logs

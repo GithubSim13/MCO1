@@ -28,6 +28,7 @@ void Core::assignProcess(Process* process, int quantum) {
 
 void Core::run() {
     ConfigManager* config = ConfigManager::getInstance();
+    int idleStreak = 0;
 
     while (true) {
         bool wasBusyThisTick = (currentProcess != nullptr);
@@ -109,6 +110,21 @@ void Core::run() {
         if (wasBusyThisTick) totalActiveTicks.fetch_add(1, std::memory_order_relaxed);
         else                 totalIdleTicks.fetch_add(1, std::memory_order_relaxed);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // Only sleep when there's genuinely nothing to do. Sleeping
+        // unconditionally here (even right after finishing a whole quantum
+        // in microseconds) throttles dispatch throughput to ~1000
+        // reassignments/sec/core regardless of how fast instructions
+        // actually execute - a short, idle-only poll avoids that bottleneck
+        // while still not busy-spinning a real host CPU core.
+        if (currentProcess == nullptr) {
+            idleStreak++;
+            if (idleStreak < 200) {
+                std::this_thread::yield();
+            } else {
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        } else {
+            idleStreak = 0;
+        }
     }
 }
