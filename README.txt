@@ -9,6 +9,7 @@ Group Members:
 
 GitHub Repository:
 https://github.com/GithubSim13/MCO1
+- GO TO MCO2 Branch for MCO2 output
 
 Entry Point:
 main.cpp (inside the MCO1 project folder)
