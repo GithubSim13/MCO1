@@ -71,12 +71,7 @@ void Process::addLog(const String& timestamp, int coreId, const String& message)
     logs.push_back({ timestamp, coreId, message });
 }
 
-// ---------------------------------------------------------------------------
-// Symbol table access. All reads/writes go through the memory allocator at
-// byte address `slot * sizeof(uint16_t)` (always within [0, 64) since every
-// process is guaranteed at least 64 bytes) so page faults on the symbol
-// table's own page are handled exactly like any other memory access.
-// ---------------------------------------------------------------------------
+// Symbol table access; reads/writes go through the allocator like any other memory access.
 
 uint16_t Process::getVariable(const String& name) {
     auto it = varSlots.find(name);
@@ -85,8 +80,7 @@ uint16_t Process::getVariable(const String& name) {
     IMemoryAllocator* alloc = ConsoleManager::getInstance()->getMemoryAllocator();
     uint16_t val = 0;
     if (!alloc->readUint16(memoryPtr, it->second * sizeof(uint16_t), val)) {
-        // Should be unreachable (symbol table addresses are always in-bounds
-        // for a process with >= 64 bytes), but never silently return garbage.
+        // Should be unreachable; guard anyway rather than return garbage.
         triggerViolation(it->second * sizeof(uint16_t));
         return 0;
     }
@@ -100,8 +94,7 @@ bool Process::declareVariable(const String& name, uint16_t value) {
         return true;
     }
     if (varSlots.size() >= MAX_SYMBOL_TABLE_VARS) {
-        // Symbol table full: per spec, "succeeding instructions involving
-        // variable declarations will be ignored."
+        // Symbol table full: new declarations are silently ignored per spec.
         return false;
     }
     size_t slot = varSlots.size();
@@ -134,9 +127,7 @@ bool Process::setVariable(const String& name, uint16_t value) {
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// General-purpose addressable access, for READ/WRITE instructions.
-// ---------------------------------------------------------------------------
+// General-purpose addressable access for READ/WRITE instructions.
 
 bool Process::readMemory(size_t address, uint16_t& outValue) {
     IMemoryAllocator* alloc = ConsoleManager::getInstance()->getMemoryAllocator();
@@ -175,18 +166,11 @@ void Process::triggerViolation(size_t address) {
 
 
 IInstruction* Process::makeRandomInstruction(int currentDepth, int remainingBudget) {
-    // Data segment (used by randomly generated READ/WRITE) is everything past
-    // the symbol table. If a process is too small to have one (min size is
-    // exactly 64 bytes, i.e. only the symbol table fits), READ/WRITE simply
-    // aren't offered as instruction types for that process.
+    // No data segment on a 64-byte process, so skip READ/WRITE there.
     bool hasDataSegment = memSize > SYMBOL_TABLE_SIZE + 1; // need room for a 2-byte access
     bool allowFor        = currentDepth < 3;               // cap nesting depth
 
-    // Build the list of instruction kinds actually available right now, then
-    // pick uniformly among *those*. Encoding availability as a numeric range
-    // fed into a switch (the previous approach) is a classic off-by-one trap:
-    // shrinking the range to exclude READ/WRITE silently repurposed their
-    // case labels instead of skipping them. An explicit list can't do that.
+    // Pick uniformly from the kinds actually available right now.
     enum Kind { K_PRINT, K_DECLARE, K_ADD, K_SUBTRACT, K_SLEEP, K_READ, K_WRITE, K_FOR };
     Kind available[8];
     int  count = 0;

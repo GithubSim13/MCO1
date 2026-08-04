@@ -19,9 +19,7 @@ void ConfigManager::destroy() {
     instance = nullptr;
 }
 
-// Strips one pair of surrounding double-quotes, if present, e.g. "\"rr\"" -> "rr".
-// config.txt is allowed to quote the scheduler name or not; we normalize here so
-// every other part of the codebase can compare against a plain "fcfs"/"rr".
+// Strips surrounding quotes from a config value, e.g. "\"rr\"" -> "rr".
 static String stripQuotes(const String& s) {
     if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
         return s.substr(1, s.size() - 2);
@@ -50,18 +48,13 @@ bool ConfigManager::loadConfig(const String& filename) {
         else if (key == "min-mem-per-proc") file >> minMemPerProc;
         else if (key == "max-mem-per-proc") file >> maxMemPerProc;
         else if (key == "mem-per-proc") {
-            // Legacy MO1-only key. If a config still has this instead of the new
-            // min/max pair, treat it as a fixed-size process (min == max == value)
-            // so old config files degrade gracefully instead of silently
-            // producing zero-byte processes.
+            // Legacy MO1 key: treat as fixed-size (min == max == value).
             int legacy; file >> legacy;
             if (minMemPerProc == 0) minMemPerProc = legacy;
             if (maxMemPerProc == 0) maxMemPerProc = legacy;
         }
         else {
-            // Unknown key: consume its value token so we don't desync the
-            // space-separated stream on later keys, but flag it so typos in
-            // config.txt don't fail silently.
+            // Unknown key: consume its value and warn instead of desyncing the stream.
             String ignored; file >> ignored;
             std::cout << "Warning: unrecognized config key '" << key << "' ignored.\n";
         }

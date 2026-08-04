@@ -43,16 +43,12 @@ void ConsoleManager::run() {
     printHeader();
     String input;
     while (true) {
-        std::cout << "root:\\> ";
+        std::cout << "\nroot:\\> ";
         std::getline(std::cin, input);
         if (input == "exit") break;
         handleCommand(input);
     }
 }
-
-// ---------------------------------------------------------------------------
-// Top-level command dispatch
-// ---------------------------------------------------------------------------
 
 void ConsoleManager::handleCommand(const String& input) {
     std::istringstream iss(input);
@@ -61,7 +57,7 @@ void ConsoleManager::handleCommand(const String& input) {
 
     if (cmd.empty()) return;
 
-    if (!isInitialized && cmd != "initialize") {
+    if (!isInitialized && cmd != "initialize" && cmd != "help") {
         std::cout << "Please run 'initialize' first.\n";
         return;
     }
@@ -80,10 +76,7 @@ void ConsoleManager::handleCommand(const String& input) {
         std::getline(iss, rest); // preserves spacing/quoting for screen -c's instruction string
         handleScreenCommand(rest);
     }
-    // Both spellings are accepted: the spec's own wording is inconsistent
-    // between "scheduler-test" and "scheduler_start" for the batch-generation
-    // command, and this codebase historically called it "scheduler-start" -
-    // accepting all three means a grader typing any of them still works.
+    // Accept all three spellings since the spec is inconsistent about the name.
     else if (cmd == "scheduler-start" || cmd == "scheduler-test" || cmd == "scheduler_start") {
         ProcessScheduler::getInstance()->startScheduler();
         std::cout << "Scheduler started.\n";
@@ -91,6 +84,9 @@ void ConsoleManager::handleCommand(const String& input) {
     else if (cmd == "scheduler-stop") {
         ProcessScheduler::getInstance()->stopScheduler();
         std::cout << "Scheduler stopped.\n";
+    }
+    else if (cmd == "help") {
+        handleHelp();
     }
     else if (cmd == "report-util") {
         ScreenManager::getInstance()->reportUtil();
@@ -140,6 +136,27 @@ void ConsoleManager::handleInitialize() {
                << config->maxMemPerProc << "] bytes\n";
 }
 
+void ConsoleManager::handleHelp() {
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "AVAILABLE COMMANDS\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "initialize                       - load config.txt, boot the system\n";
+    std::cout << "screen -s <name> [mem]           - create a process, open its screen\n";
+    std::cout << "screen -c <name> [mem] \"<ins>\"   - create a process with custom instructions\n";
+    std::cout << "screen -r <name>                 - reattach to a running process's screen\n";
+    std::cout << "screen -ls                       - list running/finished/violated processes\n";
+    std::cout << "scheduler-start / scheduler-test - begin generating dummy processes\n";
+    std::cout << "scheduler-stop                   - stop generating dummy processes\n";
+    std::cout << "report-util                      - write the screen -ls report to csopesy-log.txt\n";
+    std::cout << "vmstat                           - memory + CPU tick statistics\n";
+    std::cout << "process-smi                      - memory usage / per-process summary\n";
+    std::cout << "help                             - show this list\n";
+    std::cout << "exit                             - terminate the program\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "Inside a process screen: process-smi (refresh), exit (back to main menu)\n";
+    std::cout << "------------------------------------------------------------\n";
+}
+
 void ConsoleManager::handleVmstat() {
     if (!isInitialized) { std::cout << "Please run 'initialize' first.\n"; return; }
 
@@ -150,7 +167,9 @@ void ConsoleManager::handleVmstat() {
     long long idleTicks   = Core::getTotalIdleTicks();
     long long totalTicks  = activeTicks + idleTicks;
 
-    std::cout << "-------------------------------------------\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "VMSTAT\n";
+    std::cout << "------------------------------------------------------------\n";
     std::cout << std::left << std::setw(20) << "Total memory:"     << total       << " bytes\n";
     std::cout << std::left << std::setw(20) << "Used memory:"      << used        << " bytes\n";
     std::cout << std::left << std::setw(20) << "Free memory:"      << free        << " bytes\n";
@@ -159,11 +178,10 @@ void ConsoleManager::handleVmstat() {
     std::cout << std::left << std::setw(20) << "Total cpu ticks:"  << totalTicks  << "\n";
     std::cout << std::left << std::setw(20) << "Num paged in:"     << memoryAllocator->getNumPagedIn()  << "\n";
     std::cout << std::left << std::setw(20) << "Num paged out:"    << memoryAllocator->getNumPagedOut() << "\n";
-    std::cout << "-------------------------------------------\n";
+    std::cout << "------------------------------------------------------------\n";
 }
 
-// nvidia-smi-style summarized view: overall memory + the list of live
-// processes and how much memory each is occupying.
+// nvidia-smi-style summary: overall memory usage + per-process footprint.
 void ConsoleManager::handleProcessSmi() {
     if (!isInitialized) { std::cout << "Please run 'initialize' first.\n"; return; }
 
@@ -173,12 +191,12 @@ void ConsoleManager::handleProcessSmi() {
 
     ProcessScheduler* sched = ProcessScheduler::getInstance();
 
-    std::cout << "+-------------------------------------------------------------+\n";
-    std::cout << "| PROCESS-SMI                                                  |\n";
-    std::cout << "+-------------------------------------------------------------+\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "PROCESS-SMI\n";
+    std::cout << "------------------------------------------------------------\n";
     std::cout << "Memory Usage: " << used << "B / " << total << "B\n";
     std::cout << "Memory Util : " << std::fixed << std::setprecision(1) << util << "%\n";
-    std::cout << "---------------------------------------------------------------\n";
+    std::cout << "------------------------------------------------------------\n";
     std::cout << std::left << std::setw(14) << "Process" << "Memory\n";
     {
         std::lock_guard<std::mutex> lk(sched->queueMutex);
@@ -191,12 +209,8 @@ void ConsoleManager::handleProcessSmi() {
         }
         if (!any) std::cout << "(no running processes)\n";
     }
-    std::cout << "---------------------------------------------------------------\n";
+    std::cout << "------------------------------------------------------------\n";
 }
-
-// ---------------------------------------------------------------------------
-// "screen" sub-command dispatch
-// ---------------------------------------------------------------------------
 
 void ConsoleManager::handleScreenCommand(const String& rest) {
     std::istringstream iss(rest);
@@ -240,14 +254,7 @@ bool ConsoleManager::validateProcessMemorySize(const String& sizeStr, size_t& ou
     return true;
 }
 
-// Used by screen -s / screen -c when no explicit memory size is given. Per
-// the spec, min-mem-per-proc/max-mem-per-proc govern the size rolled for
-// processes created via the scheduler ("scheduler-start"/"scheduler-test"),
-// not manually-created ones - a manually created process is a developer/
-// grader poking at specific behavior (e.g. a WRITE to a specific hex
-// address), so it gets the largest size the spec allows (65536 bytes) rather
-// than being constrained by whatever tiny min/max-mem-per-proc a *different*
-// test's config.txt happens to specify.
+// Default size for screen -s/-c when omitted (spec max, not min/max-mem-per-proc).
 size_t ConsoleManager::rollConfiguredMemSize() {
     return 65536;
 }
@@ -260,12 +267,7 @@ void ConsoleManager::handleScreenCreate(std::istringstream& iss) {
         return;
     }
 
-    // Memory size is OPTIONAL here: the written spec documents an explicit
-    // size ("screen -s <name> <mem>"), but some grading scripts call this as
-    // just "screen -s <name>" and expect the size to be derived the same way
-    // a scheduler-generated process's size is (a roll within
-    // [min-mem-per-proc, max-mem-per-proc]). Support both: if a size token
-    // IS present, it must validate strictly; if it's absent, we derive one.
+    // Size is optional: derive a default if omitted, else validate strictly.
     String sizeStr;
     iss >> sizeStr;
 
@@ -321,12 +323,7 @@ void ConsoleManager::handleScreenCustom(std::istringstream& iss, const String& /
     }
     remainder = remainder.substr(firstNonSpace);
 
-    // Same "size is optional" reasoning as screen -s: some grading scripts
-    // call this as "screen -c <name> \"<instrs>\"" with no size at all. We can
-    // tell the two forms apart unambiguously: if the very next non-space
-    // character is a quote, no size was given (the whole remainder IS the
-    // instruction string); otherwise the first token is a size, and
-    // everything after it must start with a quote.
+    // If size is omitted, the remainder starts with a quote; else the first token is the size.
     size_t memSize;
     String instrPart;
 

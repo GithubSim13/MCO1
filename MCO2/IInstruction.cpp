@@ -11,10 +11,6 @@ static uint16_t clamp16(int32_t val) {
     return static_cast<uint16_t>(val);
 }
 
-// ---------------------------------------------------------------------------
-// PRINT
-// ---------------------------------------------------------------------------
-
 PrintInstruction::PrintInstruction(const String& msg, bool isVar, bool useDefault)
     : msg(msg), isVar(isVar), useDefault(useDefault) {
 }
@@ -42,10 +38,6 @@ void PrintInstruction::execute(Process* process) {
     process->currentLine++;
 }
 
-// ---------------------------------------------------------------------------
-// DECLARE - create-only: a no-op if the variable already exists (MO1 semantics)
-// ---------------------------------------------------------------------------
-
 DeclareInstruction::DeclareInstruction(const String& varName, uint16_t value)
     : varName(varName), value(value) {
 }
@@ -55,10 +47,6 @@ void DeclareInstruction::execute(Process* process) {
     if (process->isViolationShutdown()) return; // symbol table addr is always valid, but guard anyway
     process->currentLine++;
 }
-
-// ---------------------------------------------------------------------------
-// ADD / SUBTRACT - dest is create-or-update (an implicit declare on first use)
-// ---------------------------------------------------------------------------
 
 AddInstruction::AddInstruction(const String& dest, const Operand& op1, const Operand& op2)
     : dest(dest), op1(op1), op2(op2) {
@@ -94,10 +82,6 @@ void SubtractInstruction::execute(Process* process) {
     process->currentLine++;
 }
 
-// ---------------------------------------------------------------------------
-// SLEEP
-// ---------------------------------------------------------------------------
-
 SleepInstruction::SleepInstruction(uint8_t ticks)
     : ticks(ticks) {
 }
@@ -107,10 +91,6 @@ void SleepInstruction::execute(Process* process) {
     process->pendingSleep = true;
     process->currentLine++;
 }
-
-// ---------------------------------------------------------------------------
-// FOR
-// ---------------------------------------------------------------------------
 
 ForInstruction::ForInstruction(const std::vector<IInstruction*>& body, int repeats)
     : body(body), repeats(repeats) {
@@ -130,16 +110,11 @@ void ForInstruction::execute(Process* process) {
             if (process->pendingSleep || process->isViolationShutdown()) { interrupted = true; break; }
         }
     }
-    // If a memory violation fired mid-loop, leave currentLine exactly where the
-    // faulting instruction left it, so screen -r/logs point at the real fault site.
+    // If violated mid-loop, leave currentLine at the faulting instruction.
     if (!process->isViolationShutdown()) {
         process->currentLine = savedLine + 1;
     }
 }
-
-// ---------------------------------------------------------------------------
-// READ / WRITE - the actual demand-paged memory access instructions
-// ---------------------------------------------------------------------------
 
 ReadInstruction::ReadInstruction(const String& destVar, size_t address)
     : destVar(destVar), address(address) {
@@ -167,10 +142,7 @@ void WriteInstruction::execute(Process* process) {
     process->currentLine++;
 }
 
-// ---------------------------------------------------------------------------
 // screen -c instruction-string parser
-// ---------------------------------------------------------------------------
-
 namespace {
 
 String trim(const String& s) {
@@ -181,8 +153,7 @@ String trim(const String& s) {
 }
 
 std::vector<String> splitTopLevel(const String& text, char delim) {
-    // Splits on `delim`, but ignores delimiters that appear inside a
-    // double-quoted string, so PRINT("a; b") isn't torn in half.
+    // Splits on delim, ignoring delimiters inside a quoted string.
     std::vector<String> parts;
     String current;
     bool inQuotes = false;
@@ -233,10 +204,9 @@ bool parseOperand(const String& s, AddInstruction::Operand& out) {
     return false;
 }
 
-// Parses a "0x..." hex address. Range-checks against processMemSize (minus 1
-// byte, since every access here is a uint16 -> needs address+1 too).
+// Parses a "0x..." hex address string.
 bool parseHexAddress(const String& s, size_t processMemSize, size_t& outAddress, String& err) {
-    (void)processMemSize; // kept in the signature for callers/readability; see note below
+    (void)processMemSize; // unused: range-checked at runtime, not parse time
     if (s.size() < 3 || (s[0] != '0') || (s[1] != 'x' && s[1] != 'X')) {
         err = "expected a hex address like 0x500, got '" + s + "'";
         return false;
@@ -252,10 +222,7 @@ bool parseHexAddress(const String& s, size_t processMemSize, size_t& outAddress,
         err = "invalid hex address '" + s + "'";
         return false;
     }
-    // Note: we intentionally do NOT reject val >= processMemSize here as a
-    // *parse* error - an out-of-range address is a legal instruction that is
-    // supposed to compile fine and cause a runtime memory access violation
-    // when it actually executes (that's the whole point of the feature).
+    // Out-of-range addresses parse fine; they violate only when executed.
     outAddress = static_cast<size_t>(val);
     return true;
 }
@@ -268,10 +235,7 @@ std::vector<String> splitWhitespace(const String& s) {
     return tokens;
 }
 
-// Parses the inside of PRINT(...). Supports:
-//   "literal text"
-//   varName
-//   "prefix" + varName
+// Parses inside of PRINT(...): "text" | varName | "prefix" + varName.
 bool parsePrint(const String& insideParens, IInstruction*& outInstruction, String& err) {
     String s = trim(insideParens);
     size_t firstQuote = s.find('"');

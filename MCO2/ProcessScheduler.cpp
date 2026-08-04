@@ -22,7 +22,7 @@ void ProcessScheduler::initialize() {
     for (int i = 0; i < config->numCpu; i++) {
         Core* core = new Core(i);
 
-        // Wire the preemption callback so Core can return a process to our queue
+        // Lets Core hand a preempted/sleeping process back to our queue.
         core->onPreempt = [](Process* p) {
             ProcessScheduler::getInstance()->requeueProcess(p);
         };
@@ -36,10 +36,6 @@ void ProcessScheduler::destroy() {
     delete instance;
     instance = nullptr;
 }
-
-// -----------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------
 
 void ProcessScheduler::addProcess(Process* process) {
     std::lock_guard<std::mutex> lock(queueMutex);
@@ -67,10 +63,6 @@ void ProcessScheduler::requeueProcess(Process* process) {
     }
 }
 
-// -----------------------------------------------------------------------
-// Scheduler thread main loop
-// -----------------------------------------------------------------------
-
 static String makeTimestamp() {
     time_t now = time(0);
     tm ltm;
@@ -91,11 +83,7 @@ static String makeTimestamp() {
     return oss.str();
 }
 
-// Rolls M in [min-mem-per-proc, max-mem-per-proc] (inclusive) for one
-// scheduler-generated process, per the spec's "M is the rolled value between
-// min-mem-per-proc and max-mem-per-proc." Page count P = M / mem-per-frame
-// falls out naturally from however PagingMemoryAllocator::allocate() sizes
-// the page table (ceil(M / frameSize) pages).
+// Rolls a random process size in [min-mem-per-proc, max-mem-per-proc].
 static size_t rollProcessMemSize(int minMemPerProc, int maxMemPerProc) {
     static thread_local std::mt19937 rng(std::random_device{}());
     std::uniform_int_distribution<int> dist(minMemPerProc, maxMemPerProc);
@@ -114,10 +102,7 @@ void ProcessScheduler::generateBatchProcess() {
 
     void* allocatedPtr = ConsoleManager::getInstance()->getMemoryAllocator()->allocate(memSize);
     if (allocatedPtr == nullptr) {
-        // RAM is full and nothing could even be evicted to make room (should be
-        // rare/never with a correct paging allocator) - skip this generation
-        // cycle rather than spawning a process with no memory behind it.
-        nextPid.fetch_sub(1); // don't burn a PID on a process that never got created
+        nextPid.fetch_sub(1); // skip this cycle, don't burn a PID
         return;
     }
 
@@ -133,8 +118,7 @@ void ProcessScheduler::run() {
     ConfigManager* config = ConfigManager::getInstance();
 
     while (true) {
-        // Advance the CPU cycle counter unconditionally so sleeping processes
-        // are not frozen when scheduler-stop is called.
+        // Cycle counter advances regardless of scheduler-stop, so sleeps don't freeze.
         int cycle = cpuCycle.fetch_add(1);
 
         // Wake any sleeping processes whose sleep period has expired
@@ -150,7 +134,7 @@ void ProcessScheduler::run() {
             }
         }
 
-        // Batch process generation: every batchProcessFreq CPU cycles
+        // Generate a process every batchProcessFreq cycles.
         if (running && config->batchProcessFreq > 0 && cycle % config->batchProcessFreq == 0) {
             generateBatchProcess();
         }
@@ -165,10 +149,7 @@ void ProcessScheduler::run() {
     }
 }
 
-// -----------------------------------------------------------------------
-// FCFS: assign any queued process to a free core, run to completion
-// -----------------------------------------------------------------------
-
+// FCFS: assign a queued process to a free core, run to completion.
 void ProcessScheduler::scheduleFCFS() {
     std::lock_guard<std::mutex> lock(queueMutex);
     for (Core* core : cores) {
@@ -180,10 +161,7 @@ void ProcessScheduler::scheduleFCFS() {
     }
 }
 
-// -----------------------------------------------------------------------
-// RR: assign a process for exactly quantumCycles instructions, then preempt
-// -----------------------------------------------------------------------
-
+// RR: assign a process for exactly quantumCycles instructions, then preempt.
 void ProcessScheduler::scheduleRR() {
     ConfigManager* config = ConfigManager::getInstance();
     std::lock_guard<std::mutex> lock(queueMutex);

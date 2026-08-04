@@ -25,8 +25,7 @@ public:
     // Full formatted timestamp, e.g. "(07/29/2026 02:15:30PM)" - used for logs.
     String getTimestamp();
 
-    // Bare "HH:MM:SS" (24-hour) - used specifically for the memory access
-    // violation message format required by the spec.
+    // Bare "HH:MM:SS" (24-hour), used for the memory violation message.
     String getTimeOnly();
 
 private:

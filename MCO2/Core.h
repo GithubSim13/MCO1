@@ -18,10 +18,7 @@ public:
     // Called by ProcessScheduler to give back a preempted process
     std::function<void(Process*)> onPreempt;
 
-    // Cumulative CPU-tick accounting across ALL cores, used by vmstat.
-    // One "tick" = one pass through this core's dispatch loop (~1ms). A core
-    // counts as "active" for a tick if it had a process assigned at the top
-    // of that pass, "idle" otherwise.
+    // Cumulative CPU tick accounting across all cores, used by vmstat.
     static long long getTotalActiveTicks();
     static long long getTotalIdleTicks();
 

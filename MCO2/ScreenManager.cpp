@@ -6,6 +6,8 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
+#include <vector>
 
 ScreenManager* ScreenManager::instance = nullptr;
 
@@ -50,9 +52,11 @@ String ScreenManager::getTimeOnly() {
 }
 
 void ScreenManager::printProcessSMI(Process* process) {
+    std::cout << "------------------------------------------------------------\n";
     std::cout << "Process name: " << process->name << "\n";
     std::cout << "ID: " << process->id << "\n";
-    std::cout << "Memory: " << process->memSize << " bytes\n\n";
+    std::cout << "Memory: " << process->memSize << " bytes\n";
+    std::cout << "------------------------------------------------------------\n";
     std::cout << "Logs:\n";
     {
         std::lock_guard<std::mutex> lock(process->processMutex);
@@ -78,11 +82,22 @@ void ScreenManager::runScreenLoop(Process* process) {
 #else
     system("clear");
 #endif
+    // Root-level commands typed reflexively while still inside a process screen.
+    static const std::vector<String> rootOnlyCommands = {
+        "initialize", "vmstat", "screen", "scheduler-start", "scheduler-test",
+        "scheduler_start", "scheduler-stop", "report-util"
+    };
+
     String cmd;
     while (true) {
         printProcessSMI(process);
-        std::cout << "\nroot:\\> ";
+        std::cout << "\n" << process->name << ":\\> ";
         std::getline(std::cin, cmd);
+
+        std::istringstream firstTokenStream(cmd);
+        String firstToken;
+        firstTokenStream >> firstToken;
+
         if (cmd == "exit") {
             break;
         }
@@ -92,6 +107,9 @@ void ScreenManager::runScreenLoop(Process* process) {
 #else
             system("clear");
 #endif
+        }
+        else if (std::find(rootOnlyCommands.begin(), rootOnlyCommands.end(), firstToken) != rootOnlyCommands.end()) {
+            std::cout << "'" << firstToken << "' is a root-level command. Type 'exit' to return to the main menu first.\n";
         }
         else {
             std::cout << "Commands: process-smi (refresh), exit (back to main)\n";
@@ -123,16 +141,13 @@ void ScreenManager::reattachScreen(const String& processName) {
         return;
     }
 
-    // MO2 addition: a process that was shut down for an out-of-bounds memory
-    // access gets a specific diagnostic instead of the generic "not found."
+    // A violation shutdown gets a specific diagnostic instead of "not found."
     if (found->isViolationShutdown()) {
         std::cout << found->getViolationMessage() << "\n";
         return;
     }
 
-    // MO1 behavior preserved: a normally-finished process can no longer be
-    // reattached to (nothing left to show beyond what screen -ls already
-    // reports), so it still gets "not found."
+    // A normally-finished process can no longer be reattached to.
     if (found->isFinished()) {
         std::cout << "Process " << processName << " not found.\n";
         return;
@@ -141,8 +156,7 @@ void ScreenManager::reattachScreen(const String& processName) {
     runScreenLoop(found);
 }
 
-// Shared by listScreens() (stdout) and reportUtil() (csopesy-log.txt) so the
-// two can never silently drift apart.
+// Shared by listScreens() and reportUtil() so they can't drift apart.
 static void writeUtilizationReport(std::ostream& out) {
     ProcessScheduler* scheduler = ProcessScheduler::getInstance();
     ConfigManager* config = ConfigManager::getInstance();
@@ -156,10 +170,13 @@ static void writeUtilizationReport(std::ostream& out) {
 
     int util = total > 0 ? (used * 100 / total) : 0;
 
+    out << "------------------------------------------------------------\n";
+    out << "SCREEN -LS\n";
+    out << "------------------------------------------------------------\n";
     out << "CPU utilization: " << util << "%\n";
     out << "Cores used: " << used << "\n";
-    out << "Cores available: " << (total - used) << "\n\n";
-    out << "--------------------------------------\n";
+    out << "Cores available: " << (total - used) << "\n";
+    out << "------------------------------------------------------------\n";
 
     out << "Running processes:\n";
     bool anyRunning = false;
@@ -200,7 +217,7 @@ static void writeUtilizationReport(std::ostream& out) {
     }
     if (!anyViolated) out << "(none)\n";
 
-    out << "--------------------------------------\n";
+    out << "------------------------------------------------------------\n";
 }
 
 void ScreenManager::listScreens() {

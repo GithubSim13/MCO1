@@ -45,9 +45,7 @@ PagingMemoryAllocator::PagingMemoryAllocator(size_t totalRamSize, size_t frameSi
     this->freeFrames.resize(numFrames, true);
     this->physicalMemory.resize(numFrames * frameSize, 0);
 
-    // Fresh backing store every run (trunc) - a stale one from a previous
-    // session would otherwise contain slot indices that no longer mean
-    // anything to this process's page tables.
+    // Fresh backing store every run - stale slot indices wouldn't mean anything now.
     backingStoreFile.open("csopesy-backing-store.txt",
         std::ios::in | std::ios::out | std::ios::trunc | std::ios::binary);
     writeHeader();
@@ -109,9 +107,7 @@ int PagingMemoryAllocator::findFreeFrame() {
     return -1;
 }
 
-// Global FIFO victim selection: evicts the oldest still-resident page across
-// ALL processes' page tables (stale entries belonging to already-deallocated
-// processes are skipped and discarded).
+// Global FIFO victim selection across all processes' resident pages.
 int PagingMemoryAllocator::evictVictimFrame() {
     while (!fifoPages.empty()) {
         auto victim = fifoPages.front();
@@ -180,9 +176,7 @@ void PagingMemoryAllocator::deallocate(void* ptr) {
     currentAllocatedSize -= (it->second.size() * frameSize);
     processPageTables.erase(it);
     allocationSizes.erase(ptr);
-    // Deliberately NOT erasing fifoPages entries for this ptr - they are
-    // skipped lazily in evictVictimFrame() (owner lookup fails). Scrubbing a
-    // std::queue in place would cost O(n) per deallocate for no real benefit.
+    // fifoPages entries for this ptr are skipped lazily in evictVictimFrame().
 }
 
 PageTableEntry* PagingMemoryAllocator::ensureResidentLocked(void* ptr, size_t offset) {
@@ -195,11 +189,7 @@ PageTableEntry* PagingMemoryAllocator::ensureResidentLocked(void* ptr, size_t of
     PageTableEntry& pte = it->second[pageNum];
     if (pte.valid) return &pte;
 
-    // Page fault. Per the spec: keep trying (find-a-frame -> evict-if-needed)
-    // until a valid frame is obtained. In a correctly functioning system this
-    // always terminates in at most `numFrames` evictions; the bound below is
-    // purely a defensive guard against an unforeseen bug turning this into an
-    // infinite loop during a live demo/quiz.
+    // Page fault: retry find-free-or-evict until a valid frame is obtained.
     int frame = -1;
     for (size_t attempts = 0; attempts <= numFrames + 1; ++attempts) {
         frame = findFreeFrame();
@@ -207,9 +197,7 @@ PageTableEntry* PagingMemoryAllocator::ensureResidentLocked(void* ptr, size_t of
         if (frame != -1) break;
     }
     if (frame == -1) {
-        // Should be unreachable: total resident pages can never exceed
-        // numFrames, so a free frame or a valid victim must always exist.
-        return nullptr;
+        return nullptr; // should be unreachable
     }
 
     if (pte.backingSlot != -1) {

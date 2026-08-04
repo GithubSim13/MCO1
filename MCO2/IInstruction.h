@@ -25,15 +25,10 @@ public:
 };
 
 
-// PRINT has three shapes:
-//   PRINT("literal text")                -> useDefault=false, isVar=false
-//   PRINT(varName)                       -> isVar=true            (prints "Value from: <val>")
-//   PRINT("prefix" + varName)            -> isConcat=true          (prints "<prefix><val>")
-// plus the MO1 default no-arg PRINT() -> "Hello world from <process>!"
+// PRINT(): default greeting | PRINT("text") | PRINT(var) | PRINT("prefix" + var)
 class PrintInstruction : public IInstruction {
 public:
     explicit PrintInstruction(const String& msg = "", bool isVar = false, bool useDefault = true);
-    // "prefix" + varName concatenation form
     PrintInstruction(const String& prefixText, const String& varName, bool /*concatTag*/);
 
     void execute(class Process* process) override;
@@ -129,11 +124,7 @@ private:
 };
 
 
-// READ(var, memory_address): retrieves the uint16 at `address` (within the
-// process's own memory block) and stores it into `var` (a symbol-table
-// variable, created if it doesn't exist yet, subject to the 32-variable cap).
-// If `address` is outside the process's allocated memory, this triggers a
-// memory access violation and shuts the process down.
+// READ <var> <hexAddress>: loads a uint16 into var; out-of-bounds triggers a violation.
 class ReadInstruction : public IInstruction {
 public:
     ReadInstruction(const String& destVar, size_t address);
@@ -147,9 +138,7 @@ private:
 };
 
 
-// WRITE(memory_address, value): writes a uint16 (literal or the current value
-// of a variable) to `address` within the process's own memory block. Same
-// out-of-bounds -> violation behavior as READ.
+// WRITE <hexAddress> <value>: stores a uint16; out-of-bounds triggers a violation.
 class WriteInstruction : public IInstruction {
 public:
     using Operand = AddInstruction::Operand;
@@ -165,21 +154,7 @@ private:
 };
 
 
-// Parses a semicolon-separated instruction string as accepted by
-// "screen -c <name> <mem> \"<instructions>\"" into concrete IInstruction
-// objects. Grammar per instruction (case-sensitive keywords):
-//   PRINT("text")  |  PRINT(varName)  |  PRINT("text" + varName)
-//   DECLARE <var> <uint16literal>
-//   ADD <dest> <op1> <op2>            (op := uint16literal | varName)
-//   SUBTRACT <dest> <op1> <op2>
-//   READ <var> <hexAddress>
-//   WRITE <hexAddress> <op>
-//   SLEEP <uint8ticks>
-//
-// Returns true and fills `outInstructions` (1-50 of them) on success.
-// Returns false, leaves `outInstructions` empty (any partial objects are
-// cleaned up internally), and fills `errorMessage` on any failure, including
-// the instruction-count check ("invalid command" per the spec's wording).
+// Parses a screen -c instruction string into IInstruction objects; false + errorMessage on bad syntax or an out-of-[1,50] count.
 bool ParseInstructionList(const String& text, size_t processMemSize,
                           std::vector<IInstruction*>& outInstructions,
                           String& errorMessage);

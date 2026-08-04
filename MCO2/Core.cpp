@@ -52,16 +52,13 @@ void Core::run() {
                     currentProcess->instructions[currentProcess->currentLine]->execute(currentProcess);
                 }
 
-                // Memory access violation: Process::triggerViolation() already
-                // marked the process SHUTDOWN_VIOLATION. Stop immediately -
-                // no further instructions run, and it must NOT be requeued.
+                // Violation already marked the process SHUTDOWN_VIOLATION; stop, don't requeue.
                 if (currentProcess->state == Process::SHUTDOWN_VIOLATION) {
                     violated = true;
                     break;
                 }
 
-                // Sleep relinquishment: SLEEP instruction sets pendingSleep; hand process
-                // back to the scheduler's sleeping queue and free this core immediately.
+                // SLEEP hit: hand back to the scheduler's sleeping queue, free this core.
                 if (currentProcess->pendingSleep) {
                     currentProcess->pendingSleep = false;
                     currentProcess->state        = Process::READY;
@@ -84,10 +81,7 @@ void Core::run() {
             }
 
             if (violated) {
-                // Release the process's memory back to the allocator. The
-                // Process object itself is left in allProcesses (state =
-                // SHUTDOWN_VIOLATION) so screen -r / screen -ls / process-smi
-                // can still report on what happened to it.
+                // Free memory; keep the Process object so reporting still works.
                 if (currentProcess->memoryPtr != nullptr) {
                     ConsoleManager::getInstance()->getMemoryAllocator()->deallocate(currentProcess->memoryPtr);
                     currentProcess->memoryPtr = nullptr;
